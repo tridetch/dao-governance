@@ -229,15 +229,18 @@ contract Dao is ERC20, AccessControl {
         if (proposal.voters[msg.sender]) revert AlreadyVoted();
         if (proposal.endTime < block.timestamp) revert VotePeriodIsOver();
 
-        uint256 votingPower = shares[msg.sender].amount;
+        Share memory share = shares[msg.sender];
         if (decision) {
-            proposal.votesFor += votingPower;
+            proposal.votesFor += share.amount;
         } else {
-            proposal.votesAgainst += votingPower;
+            proposal.votesAgainst += share.amount;
         }
 
+        uint256 deadline = block.timestamp + debatingPeriodDuration;
+        if (deadline > share.lockedUntil) share.lockedUntil = deadline;
         proposal.voters[msg.sender] = true;
-        emit Vote(proposalId, msg.sender, decision, votingPower);
+        
+        emit Vote(proposalId, msg.sender, decision, share.amount);
     }
 
     ///@dev Finish proposal

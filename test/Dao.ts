@@ -1,29 +1,74 @@
+import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { assert, expect } from "chai";
-import { ethers } from "hardhat";
+import { BigNumber } from "ethers";
+import { parseUnits } from "ethers/lib/utils";
+import { ethers, network } from "hardhat";
+import { Dao } from "../typechain";
 
 describe("Dao governance", function () {
+    let clean: any;
+
+    let daoContract: Dao;
+
+    let chairperson: SignerWithAddress, user1: SignerWithAddress, user2: SignerWithAddress;
+
+    const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+    const TOTAL_SUPPLY = parseUnits("100000");
+    const DEFAULT_QUORUM_PERCENT = BigNumber.from(75);
+    const DEFAULT_QUORUM_VOTES_AMOUNT: BigNumber = calculateQuorum(DEFAULT_QUORUM_PERCENT, TOTAL_SUPPLY);
+    const DEFAULT_DEBATING_PERIOD = BigNumber.from(60 * 60 * 24); // One day
+
+    before(async () => {
+        [chairperson, user1, user2] = await ethers.getSigners();
+
+        const DaoFactory = await ethers.getContractFactory("Dao");
+
+        daoContract = await DaoFactory.deploy(DEFAULT_QUORUM_PERCENT, DEFAULT_DEBATING_PERIOD, TOTAL_SUPPLY);
+        await daoContract.deployed();
+
+        clean = await network.provider.send("evm_snapshot");
+    });
+
+    afterEach(async () => {
+        await network.provider.send("evm_revert", [clean]);
+        clean = await network.provider.send("evm_snapshot");
+    });
+
+    function calculateQuorum(quorumPercent: BigNumber, tokenSupply: BigNumber): BigNumber {
+        let zero = BigNumber.from("0");
+        if (quorumPercent.eq(zero)) {
+            return zero;
+        } else {
+            return tokenSupply.mul(quorumPercent).div(100);
+        }
+    }
+
     describe("Deploy and common methods", function () {
         describe("#constructor()", function () {
             it("Should setup initial parameters correctly", async () => {
-                // minimumQuorum;
-                // debatingPeriodDuration;
-                // chairperson;
-                // calculate correct quorum
-                assert(false);
-            });
-            it("Should fail if parameter 'quorumPercent' not in range 0 - 100 percents", async () => {
-                assert(false);
+                expect(await daoContract.debatingPeriodDuration()).to.be.equal(DEFAULT_DEBATING_PERIOD);
+                expect(await daoContract.chairperson()).to.be.equal(chairperson.address);
+                expect(await daoContract.chairperson()).to.be.equal(chairperson.address);
+                expect(await daoContract.minimumQuorum()).to.be.equal(
+                    calculateQuorum(DEFAULT_QUORUM_PERCENT, TOTAL_SUPPLY)
+                );
             });
         });
         describe("#setQuorum()", function () {
             it("Should change quorum", async () => {
-                assert(false);
+                const newQuorum = BigNumber.from("25");
+                await daoContract.setQuorum(newQuorum);
+                expect(await daoContract.minimumQuorum()).to.be.equal(
+                    calculateQuorum(newQuorum, TOTAL_SUPPLY)
+                );
             });
             it("Should fail if parameter 'quorumPercent' not in range 0 - 100 percents", async () => {
-                assert(false);
+                await expect(daoContract.setQuorum(BigNumber.from(101))).to.be.revertedWith(
+                    "IncorrectQuorumParameter"
+                );
             });
             it("Only chairperson", async () => {
-                assert(false);
+                await expect(daoContract.setQuorum(BigNumber.from(101))).to.be.reverted;
             });
         });
         describe("#setDebatingDuration()", function () {
