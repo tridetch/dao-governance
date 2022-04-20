@@ -55,8 +55,8 @@ describe("Dao governance", function () {
             });
         });
         describe("#setQuorum()", function () {
+            const newQuorum = BigNumber.from("25");
             it("Should change quorum", async () => {
-                const newQuorum = BigNumber.from("25");
                 await daoContract.setQuorum(newQuorum);
                 expect(await daoContract.minimumQuorum()).to.be.equal(
                     calculateQuorum(newQuorum, TOTAL_SUPPLY)
@@ -68,36 +68,45 @@ describe("Dao governance", function () {
                 );
             });
             it("Only chairperson", async () => {
-                await expect(daoContract.setQuorum(BigNumber.from(101))).to.be.reverted;
+                await expect(daoContract.connect(user1).setQuorum(newQuorum)).to.be.reverted;
             });
         });
         describe("#setDebatingDuration()", function () {
+            const newDuration = BigNumber.from(60 * 60 * 24 * 2); // 2 days
             it("Should change duration", async () => {
-                assert(false);
+                await daoContract.setDebatingDuration(newDuration);
+                expect(await daoContract.debatingPeriodDuration()).to.be.equal(newDuration);
             });
             it("Only chairperson", async () => {
-                assert(false);
+                await expect(daoContract.connect(user1).setDebatingDuration(newDuration)).to.be.reverted;
             });
         });
     });
 
     describe("Depositing", function () {
+        const depositAmount = parseUnits("1000");
         describe("#deposit()", async () => {
             it("Should accept deposit", async function () {
-                // write user share of governance
-                // increase amount of staked tokens
-                // emit event
-                assert(false);
+                await expect(daoContract.deposit(depositAmount))
+                    .to.emit(daoContract, "Deposit")
+                    .withArgs(chairperson.address, depositAmount);
+                expect(await daoContract.balanceOf(chairperson.address)).to.be.equal(
+                    TOTAL_SUPPLY.sub(depositAmount)
+                );
+                expect((await daoContract.shares(chairperson.address)).amount).to.be.equal(depositAmount);
             });
         });
 
         describe("#withdraw()", function () {
-            it("Should fail if tokens locked in ongoing governance", async () => {
-                assert(false);
-            });
             it("Should withdrow tokens", async () => {
-                //emit withdraw
-                //check that balance decreased
+                await daoContract.deposit(depositAmount);
+                await expect(daoContract.withdraw())
+                    .to.emit(daoContract, "Withdraw")
+                    .withArgs(chairperson.address, depositAmount);
+                expect((await daoContract.shares(chairperson.address)).amount).to.be.equal(0);
+                expect(await daoContract.balanceOf(chairperson.address)).to.be.equal(TOTAL_SUPPLY);
+            });
+            it("Should fail if tokens locked in ongoing governance", async () => {
                 assert(false);
             });
         });

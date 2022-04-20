@@ -165,7 +165,7 @@ contract Dao is ERC20, AccessControl {
     ///@dev Deposit funds in DAO for voting
     ///@param amount Amount of tokens to deposit
     function deposit(uint256 amount) external {
-        transferFrom(msg.sender, address(this), amount);
+        _transfer(msg.sender, address(this), amount);
 
         Share memory share = shares[msg.sender];
         share.amount += amount;
@@ -179,7 +179,7 @@ contract Dao is ERC20, AccessControl {
         Share memory share = shares[msg.sender];
         if (share.lockedUntil > block.timestamp) revert VotingInProgress();
 
-        transfer(msg.sender, share.amount);
+        _transfer(address(this), msg.sender, share.amount);
         emit Withdraw(msg.sender, share.amount);
 
         share.amount = 0;
@@ -239,7 +239,7 @@ contract Dao is ERC20, AccessControl {
         uint256 deadline = block.timestamp + debatingPeriodDuration;
         if (deadline > share.lockedUntil) share.lockedUntil = deadline;
         proposal.voters[msg.sender] = true;
-        
+
         emit Vote(proposalId, msg.sender, decision, share.amount);
     }
 
