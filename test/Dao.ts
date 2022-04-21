@@ -3,28 +3,36 @@ import { assert, expect } from "chai";
 import { BigNumber } from "ethers";
 import { parseUnits } from "ethers/lib/utils";
 import { ethers, network } from "hardhat";
-import { Dao } from "../typechain";
+import { beforeEach } from "mocha";
+import { Dao, SecretContract } from "../typechain";
 
 describe("Dao governance", function () {
     let clean: any;
 
     let daoContract: Dao;
+    let secretContract: SecretContract;
 
     let chairperson: SignerWithAddress, user1: SignerWithAddress, user2: SignerWithAddress;
 
-    const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
     const TOTAL_SUPPLY = parseUnits("100000");
     const DEFAULT_QUORUM_PERCENT = BigNumber.from(75);
     const DEFAULT_QUORUM_VOTES_AMOUNT: BigNumber = calculateQuorum(DEFAULT_QUORUM_PERCENT, TOTAL_SUPPLY);
     const DEFAULT_DEBATING_PERIOD = BigNumber.from(60 * 60 * 24); // One day
+    const PROPOSAL_DESCRIPTION = "Invest treasure funds";
+    let proposalCallData: string;
 
     before(async () => {
         [chairperson, user1, user2] = await ethers.getSigners();
 
         const DaoFactory = await ethers.getContractFactory("Dao");
-
         daoContract = await DaoFactory.deploy(DEFAULT_QUORUM_PERCENT, DEFAULT_DEBATING_PERIOD, TOTAL_SUPPLY);
         await daoContract.deployed();
+
+        const SecretFactory = await ethers.getContractFactory("SecretContract");
+        secretContract = await SecretFactory.deploy();
+        await secretContract.deployed();
+
+        proposalCallData = secretContract.interface.encodeFunctionData("makeDaoMembersRich", [true]);
 
         clean = await network.provider.send("evm_snapshot");
     });
@@ -41,6 +49,11 @@ describe("Dao governance", function () {
         } else {
             return tokenSupply.mul(quorumPercent).div(100);
         }
+    }
+
+    async function networkWait(seconds: number) {
+        await network.provider.send("evm_increaseTime", [seconds]);
+        await network.provider.send("evm_mine", []);
     }
 
     describe("Deploy and common methods", function () {
@@ -107,7 +120,14 @@ describe("Dao governance", function () {
                 expect(await daoContract.balanceOf(chairperson.address)).to.be.equal(TOTAL_SUPPLY);
             });
             it("Should fail if tokens locked in ongoing governance", async () => {
-                assert(false);
+                await daoContract.deposit(depositAmount);
+                await daoContract.addProposal(
+                    proposalCallData,
+                    secretContract.address,
+                    "Invest treasure funds"
+                );
+                await daoContract.vote(0, true);
+                await expect(daoContract.withdraw()).to.be.revertedWith("VotingInProgress");
             });
         });
     });
@@ -115,52 +135,107 @@ describe("Dao governance", function () {
     describe("Voting", function () {
         describe("#addProposal()", function () {
             it("Should fail if not a chairman", async () => {
-                assert(false);
+                await expect(
+                    daoContract
+                        .connect(user1)
+                        .addProposal(proposalCallData, secretContract.address, PROPOSAL_DESCRIPTION)
+                ).to.be.reverted;
             });
             it("Should begin voting for this proposal", async () => {
-                //emit event
-                //proposal added to mapping
-                //id increased
-                assert(false);
+                await expect(
+                    daoContract.addProposal(proposalCallData, secretContract.address, PROPOSAL_DESCRIPTION)
+                )
+                    .to.emit(daoContract, "NewProposal")
+                    .withArgs(
+                        0,
+                        secretContract.address,
+                        PROPOSAL_DESCRIPTION,
+                        DEFAULT_DEBATING_PERIOD,
+                        DEFAULT_QUORUM_VOTES_AMOUNT
+                    );
+
+                const proposal = await daoContract.proposals(0);
+                expect(proposal.recipient).to.be.equal(secretContract.address);
+                expect(proposal.minimumQuorum).to.be.equal(DEFAULT_QUORUM_VOTES_AMOUNT);
+                expect(proposal.minimumQuorum).to.be.equal(DEFAULT_QUORUM_VOTES_AMOUNT);
+                expect(proposal.instruction).to.be.equal(proposalCallData);
+                expect(await daoContract.nextProposalId()).to.be.equal(1);
             });
         });
         describe("#vote()", function () {
+            const depositAmount = parseUnits("1000");
+            const PROPOSAL_ID = 0;
+            const FOR = true;
+            const AGAINST = false;
+
+            beforeEach(async () => {
+                await daoContract.deposit(depositAmount);
+                await daoContract.addProposal(proposalCallData, secretContract.address, PROPOSAL_DESCRIPTION);
+            });
+
             it("Should fail if no such proposal", async () => {
-                assert(false);
+                await expect(daoContract.vote(1, FOR)).to.be.revertedWith("ProposalDoNotExist");
             });
             it("Should fail if already voted", async () => {
-                assert(false);
+                await daoContract.vote(PROPOSAL_ID, FOR);
+                await expect(daoContract.vote(PROPOSAL_ID, AGAINST)).to.be.revertedWith("AlreadyVoted");
             });
             it("Should fail if debatingPeriod over", async () => {
-                assert(false);
+                await networkWait(DEFAULT_DEBATING_PERIOD.toNumber());
+                await expect(daoContract.vote(PROPOSAL_ID, FOR)).to.be.revertedWith("VotePeriodIsOver");
             });
-            it("Should count user vote", async () => {
-                ///add voter to list
-                ///vote for, vote against
-                assert(false);
+            it("Should vote successful", async () => {
+                await expect(daoContract.vote(PROPOSAL_ID, FOR))
+                    .to.emit(daoContract, "Vote")
+                    .withArgs(PROPOSAL_ID, chairperson.address, FOR, depositAmount);
             });
             it("Should be able to vote on all ongoing proposals", async () => {
-                ///add voter to list
-                assert(false);
+                await daoContract.addProposal(proposalCallData, secretContract.address, "One more proposal");
+
+                await daoContract.vote(PROPOSAL_ID, FOR);
+                await expect(daoContract.vote(1, AGAINST)).to.be.not.reverted;
             });
         });
         describe("#finishProposal()", function () {
-            it("Should fail if already executed", async () => {
-                assert(false);
+            const depositAmount = parseUnits("1000");
+            const depositQuorumAmount = parseUnits("75000");
+            const PROPOSAL_ID = 0;
+            const FOR = true;
+            const AGAINST = false;
+
+            beforeEach(async () => {
+                await daoContract.deposit(depositAmount);
+                await daoContract.addProposal(proposalCallData, secretContract.address, PROPOSAL_DESCRIPTION);
             });
+
             it("Should fail if no such proposal", async () => {
-                assert(false);
+                await expect(daoContract.finishProposal("69")).to.be.revertedWith("ProposalDoNotExist");
             });
             it("Should fail if debating in progress", async () => {
-                assert(false);
+                console.log(await daoContract.proposals(0));
+                // await expect(daoContract.finishProposal(PROPOSAL_ID)).to.be.revertedWith(
+                //     "DebatingPeriodNotOver"
+                // );
             });
             it("Should be finished with quorum failed event", async () => {
+                // await networkWait(DEFAULT_DEBATING_PERIOD.toNumber());
+                // await expect(daoContract.finishProposal(PROPOSAL_ID))
+                //     .to.emit(daoContract, "ProposalFinished")
+                //     .withArgs(PROPOSAL_ID, "QuorumNotPass");
                 assert(false);
             });
             it("Should be finished with rejected event", async () => {
+                // await daoContract.deposit(depositQuorumAmount);
+                // await networkWait(DEFAULT_DEBATING_PERIOD.toNumber());
+                // await expect(daoContract.finishProposal(PROPOSAL_ID)).to.be.revertedWith(
+                //     "DebatingPeriodNotOver"
+                // );
                 assert(false);
             });
             it("Should be finished with accepted event, and execute instruction", async () => {
+                assert(false);
+            });
+            it("Should fail if already executed", async () => {
                 assert(false);
             });
         });

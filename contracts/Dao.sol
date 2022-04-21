@@ -94,7 +94,6 @@ contract Dao is ERC20, AccessControl {
     }
 
     ///@dev Status of proposal
-    ///@param ///voting period
     enum ProposalResult {
         QuorumNotPass,
         Rejected,
@@ -202,13 +201,7 @@ contract Dao is ERC20, AccessControl {
         proposal.endTime = block.timestamp + debatingPeriodDuration;
         proposal.minimumQuorum = minimumQuorum;
 
-        emit NewProposal(
-            nextProposalId,
-            recipient,
-            description,
-            block.timestamp + debatingPeriodDuration,
-            minimumQuorum
-        );
+        emit NewProposal(nextProposalId, recipient, description, debatingPeriodDuration, minimumQuorum);
 
         nextProposalId++;
     }
@@ -237,7 +230,7 @@ contract Dao is ERC20, AccessControl {
         }
 
         uint256 deadline = block.timestamp + debatingPeriodDuration;
-        if (deadline > share.lockedUntil) share.lockedUntil = deadline;
+        if (deadline > share.lockedUntil) shares[msg.sender].lockedUntil = deadline;
         proposal.voters[msg.sender] = true;
 
         emit Vote(proposalId, msg.sender, decision, share.amount);
@@ -248,7 +241,7 @@ contract Dao is ERC20, AccessControl {
     function finishProposal(uint256 proposalId) external {
         if (isProposalNotExist(proposalId)) revert ProposalDoNotExist();
         Proposal storage proposal = proposals[nextProposalId];
-        if (proposal.endTime > block.timestamp) revert DebatingPeriodNotOver();
+        if (block.timestamp < proposal.endTime) revert DebatingPeriodNotOver();
         if (proposal.isFinished) revert ProposalAlreadyExecuted();
 
         uint256 totalVotes = proposal.votesFor + proposal.votesAgainst;
