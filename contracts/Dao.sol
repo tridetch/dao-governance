@@ -240,7 +240,7 @@ contract Dao is ERC20, AccessControl {
     ///@param proposalId id of proposal
     function finishProposal(uint256 proposalId) external {
         if (isProposalNotExist(proposalId)) revert ProposalDoNotExist();
-        Proposal storage proposal = proposals[nextProposalId];
+        Proposal storage proposal = proposals[proposalId];
         if (block.timestamp < proposal.endTime) revert DebatingPeriodNotOver();
         if (proposal.isFinished) revert ProposalAlreadyExecuted();
 

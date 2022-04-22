@@ -212,31 +212,62 @@ describe("Dao governance", function () {
                 await expect(daoContract.finishProposal("69")).to.be.revertedWith("ProposalDoNotExist");
             });
             it("Should fail if debating in progress", async () => {
-                console.log(await daoContract.proposals(0));
-                // await expect(daoContract.finishProposal(PROPOSAL_ID)).to.be.revertedWith(
-                //     "DebatingPeriodNotOver"
-                // );
+                await expect(daoContract.finishProposal(PROPOSAL_ID)).to.be.revertedWith(
+                    "DebatingPeriodNotOver"
+                );
             });
             it("Should be finished with quorum failed event", async () => {
-                // await networkWait(DEFAULT_DEBATING_PERIOD.toNumber());
-                // await expect(daoContract.finishProposal(PROPOSAL_ID))
-                //     .to.emit(daoContract, "ProposalFinished")
-                //     .withArgs(PROPOSAL_ID, "QuorumNotPass");
-                assert(false);
+                await networkWait(DEFAULT_DEBATING_PERIOD.toNumber());
+                await expect(daoContract.finishProposal(PROPOSAL_ID))
+                    .to.emit(daoContract, "ProposalFinished")
+                    .withArgs(PROPOSAL_ID, 0 /* ProposalResult.QuorumNotPass */);
             });
             it("Should be finished with rejected event", async () => {
-                // await daoContract.deposit(depositQuorumAmount);
-                // await networkWait(DEFAULT_DEBATING_PERIOD.toNumber());
-                // await expect(daoContract.finishProposal(PROPOSAL_ID)).to.be.revertedWith(
-                //     "DebatingPeriodNotOver"
-                // );
-                assert(false);
+                await daoContract.deposit(depositQuorumAmount);
+                await daoContract.vote(PROPOSAL_ID, AGAINST);
+                await networkWait(DEFAULT_DEBATING_PERIOD.toNumber());
+
+                await expect(daoContract.finishProposal(PROPOSAL_ID))
+                    .to.emit(daoContract, "ProposalFinished")
+                    .withArgs(PROPOSAL_ID, 1 /* ProposalResult.Rejected */);
             });
             it("Should be finished with accepted event, and execute instruction", async () => {
-                assert(false);
+                await daoContract.deposit(depositQuorumAmount);
+                await daoContract.vote(PROPOSAL_ID, FOR);
+                await networkWait(DEFAULT_DEBATING_PERIOD.toNumber());
+
+                await expect(daoContract.finishProposal(PROPOSAL_ID))
+                    .to.emit(daoContract, "ProposalFinished")
+                    .withArgs(PROPOSAL_ID, 2 /* ProposalResult.Executed */);
+
+                const filter = secretContract.filters.Rekted();
+                const secretEvent = (await secretContract.queryFilter(filter))[0];
+
+                expect(secretEvent.event).to.be.equal("Rekted");
+                expect(secretEvent.args.who).to.be.equal(daoContract.address);
+            });
+            it("Should be finished with accepted event, and executed with error", async () => {
+                const secondProposalId = 1;
+                const calldata = secretContract.interface.encodeFunctionData("makeDaoMembersRich", [false]);
+
+                await daoContract.deposit(depositQuorumAmount);
+                await daoContract.addProposal(calldata, secretContract.address, "Do not comfirm");
+                await daoContract.vote(secondProposalId, FOR);
+                await networkWait(DEFAULT_DEBATING_PERIOD.toNumber());
+
+                await expect(daoContract.finishProposal(secondProposalId))
+                    .to.emit(daoContract, "ProposalFinished")
+                    .withArgs(secondProposalId, 3 /* ProposalResult.ExecutedWithError */);
             });
             it("Should fail if already executed", async () => {
-                assert(false);
+                await daoContract.deposit(depositQuorumAmount);
+                await daoContract.vote(PROPOSAL_ID, FOR);
+                await networkWait(DEFAULT_DEBATING_PERIOD.toNumber());
+
+                await daoContract.finishProposal(PROPOSAL_ID);
+                await expect(daoContract.finishProposal(PROPOSAL_ID)).to.be.revertedWith(
+                    "ProposalAlreadyExecuted"
+                );
             });
         });
     });
