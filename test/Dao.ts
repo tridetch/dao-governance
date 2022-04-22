@@ -1,5 +1,5 @@
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
-import { assert, expect } from "chai";
+import { expect } from "chai";
 import { BigNumber } from "ethers";
 import { parseUnits } from "ethers/lib/utils";
 import { ethers, network } from "hardhat";
@@ -68,7 +68,7 @@ describe("Dao governance", function () {
             });
         });
         describe("#setQuorum()", function () {
-            const newQuorum = BigNumber.from("25");
+            const newQuorum = BigNumber.from("0");
             it("Should change quorum", async () => {
                 await daoContract.setQuorum(newQuorum);
                 expect(await daoContract.minimumQuorum()).to.be.equal(
@@ -189,11 +189,13 @@ describe("Dao governance", function () {
                     .to.emit(daoContract, "Vote")
                     .withArgs(PROPOSAL_ID, chairperson.address, FOR, depositAmount);
             });
-            it("Should be able to vote on all ongoing proposals", async () => {
-                await daoContract.addProposal(proposalCallData, secretContract.address, "One more proposal");
-
+            it("Should be able to vote on all ongoing proposals and don't change unlock period", async () => {
                 await daoContract.vote(PROPOSAL_ID, FOR);
+                await daoContract.setDebatingDuration(60 * 60 * 3); //3 hours
+                await daoContract.addProposal(proposalCallData, secretContract.address, "One more proposal");
+                
                 await expect(daoContract.vote(1, AGAINST)).to.be.not.reverted;
+                
             });
         });
         describe("#finishProposal()", function () {

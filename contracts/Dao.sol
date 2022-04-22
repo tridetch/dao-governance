@@ -219,8 +219,9 @@ contract Dao is ERC20, AccessControl {
     function vote(uint256 proposalId, bool decision) external {
         if (isProposalNotExist(proposalId)) revert ProposalDoNotExist();
         Proposal storage proposal = proposals[proposalId];
+        uint deadline = proposal.endTime;
         if (proposal.voters[msg.sender]) revert AlreadyVoted();
-        if (proposal.endTime < block.timestamp) revert VotePeriodIsOver();
+        if (deadline < block.timestamp) revert VotePeriodIsOver();
 
         Share memory share = shares[msg.sender];
         if (decision) {
@@ -229,7 +230,6 @@ contract Dao is ERC20, AccessControl {
             proposal.votesAgainst += share.amount;
         }
 
-        uint256 deadline = block.timestamp + debatingPeriodDuration;
         if (deadline > share.lockedUntil) shares[msg.sender].lockedUntil = deadline;
         proposal.voters[msg.sender] = true;
 
