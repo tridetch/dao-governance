@@ -219,7 +219,7 @@ contract Dao is ERC20, AccessControl {
     function vote(uint256 proposalId, bool decision) external {
         if (isProposalNotExist(proposalId)) revert ProposalDoNotExist();
         Proposal storage proposal = proposals[proposalId];
-        uint deadline = proposal.endTime;
+        uint256 deadline = proposal.endTime;
         if (proposal.voters[msg.sender]) revert AlreadyVoted();
         if (deadline < block.timestamp) revert VotePeriodIsOver();
 
